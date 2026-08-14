@@ -1,0 +1,58 @@
+# Github action definitions for unit-tests with PRs.
+
+name: tfma-unit-tests
+
+on:
+  push:
+  pull_request:
+    branches: [ master ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12', '3.13']
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      with:
+        persist-credentials: false
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+        cache-dependency-path: |
+          setup.py
+
+    - name: Remove buggy sitecustomize
+      run: |
+        sudo find /etc/ -name "*sitecustomize*" -print -delete || true
+        sudo find /usr/ -name "*sitecustomize*" -print -delete || true
+        sudo find /opt/ -name "*sitecustomize*" -print -delete || true
+        sudo find /home/runner/ -name "*sitecustomize*" -print -delete || true
+
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y protobuf-compiler
+        pip install --upgrade pip setuptools wheel numpy pyarrow
+        pip install --no-build-isolation .
+
+    - name: Run unit tests
+      shell: bash
+      run: |
+        python -m unittest discover -p "*_test.py"
